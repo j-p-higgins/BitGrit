@@ -1,61 +1,57 @@
-cmake_minimum_required(VERSION 3.15)
-
-# On M1 Macs, uncomment to enable universal binaries
-# set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "")
-
-set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build, options are: Debug Release")
-
-project(RNBO_JUCE_EXAMPLE VERSION 2.0.0)
-
-set(CMAKE_CXX_STANDARD 14) #JUCE requires 14
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_COLOR_MAKEFILE ON)
-set(CMAKE_COLOR_DIAGNOSTICS ON)
-
-set(RNBO_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/export/rnbo/" CACHE FILEPATH "The path to the the RNBO c++ source directory")
-set(RNBO_EXPORT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/export/" CACHE FILEPATH "path to your export directory")
-set(RNBO_CLASS_FILE_NAME "rnbo_source.cpp" CACHE STRING "the name of your rnbo class file")
-mark_as_advanced(RNBO_CLASS_FILE_NAME)
-
-set(RNBO_CLASS_NAME "rnbomatic")
-set(RNBO_CLASS_FILE "${RNBO_EXPORT_DIR}/${RNBO_CLASS_FILE_NAME}")
-set(RNBO_DESCRIPTION_FILE "${RNBO_EXPORT_DIR}/description.json")
-set(RNBO_PRESETS_FILE "${RNBO_EXPORT_DIR}/presets.json")
-set(RNBO_BINARY_DATA_FILE "${RNBO_EXPORT_DIR}/${RNBO_CLASS_NAME}_binary.cpp")
-set(RNBO_BINARY_DATA_STORAGE_NAME "${RNBO_CLASS_NAME}_binary")
-set(PLUGIN_PARAM_DEFAULT_NOTIFY ON CACHE BOOL "Should parameter changes from inside your rnbo patch send output by default?")
-
-#write description header file if description.json exists, sets RNBO_INCLUDE_DESCRIPTION_FILE if the file exists
-include(${RNBO_CPP_DIR}/cmake/RNBODescriptionHeader.cmake)
-set(DESCRIPTION_INCLUDE_DIR ${CMAKE_BINARY_DIR}/include)
-rnbo_write_description_header_if_exists(${RNBO_DESCRIPTION_FILE} ${DESCRIPTION_INCLUDE_DIR} ${RNBO_PRESETS_FILE})
-include_directories(${DESCRIPTION_INCLUDE_DIR})
-
-if (EXISTS ${RNBO_BINARY_DATA_FILE})
-	add_definitions(-DRNBO_BINARY_DATA_STORAGE_NAME=${RNBO_BINARY_DATA_STORAGE_NAME})
+cmake_minimum_required(VERSION 3.21)
+ 
+set(PROJECT_NAME "BitGrit")
+set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Build architectures for macOS")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.11" CACHE STRING "Minimum macOS version required")
+ 
+project("${PROJECT_NAME}" VERSION 1.0.0)
+ 
+set(formats "VST3" "Standalone")
+ 
+if(APPLE)
+    list(APPEND formats "AU")
 endif()
-
-# Include the JUCE submodule, needed for JUCE-based CMake definitions
-add_subdirectory(
-  ${CMAKE_CURRENT_LIST_DIR}/thirdparty/juce
-  ${CMAKE_BINARY_DIR}/juce
-  EXCLUDE_FROM_ALL #don't build examples etc, also don't install
-)
-
-# Or, instead, use Conan to get JUCE, should speed up clean builds
-# include(${RNBO_CPP_DIR}/cmake/RNBOJuce.cmake)
-
-
-# Optionally, enable ccache, should speed up builds
-# include(${RNBO_CPP_DIR}/cmake/CCache.cmake)
-
-
-# Comment out this line if you really want to emulate MIDI CC with Audio Parameters.
-# See the discussion here: https://forums.steinberg.net/t/vst3-and-midi-cc-pitfall/201879/11
-add_compile_definitions(JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0)
-
-# setup your application, you can remove this include if you don't want to build applications
-include(${CMAKE_CURRENT_LIST_DIR}/App.cmake)
-
-# setup your plugin(s), you can remove this include if you don't want to build plugins
-include(${CMAKE_CURRENT_LIST_DIR}/Plugin.cmake)
+ 
+add_subdirectory(External/JUCE)
+ 
+juce_add_plugin("${PROJECT_NAME}"
+    VERSION "1.0.0"
+    COMPANY_NAME "Jonathan Higgins"
+    PLUGIN_MANUFACTURER_CODE "JPHi"
+    PLUGIN_CODE "JH02"
+    FORMATS ${formats}
+    COPY_PLUGIN_AFTER_BUILD FALSE
+    IS_SYNTH FALSE     
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    PRODUCT_NAME "${PROJECT_NAME}")
+ 
+juce_generate_juce_header("${PROJECT_NAME}")
+ 
+include_directories(
+    "${CMAKE_CURRENT_SOURCE_DIR}/RnboExport/rnbo"
+    "${CMAKE_CURRENT_SOURCE_DIR}/RnboExport/rnbo/common")
+ 
+target_sources("${PROJECT_NAME}"
+    PRIVATE
+        RnboExport/rnbo_bitgrit.cpp
+        RnboExport/rnbo/RNBO.cpp
+        Source/PluginProcessor.cpp
+        Source/PluginEditor.cpp)
+ 
+target_compile_features("${PROJECT_NAME}" PUBLIC cxx_std_20)
+ 
+target_compile_definitions("${PROJECT_NAME}"
+    PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+	JUCE_DISPLAY_SPLASH_SCREEN=0)
+ 
+target_link_libraries("${PROJECT_NAME}"
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags)
